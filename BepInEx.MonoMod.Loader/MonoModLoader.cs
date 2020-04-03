@@ -2,8 +2,11 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
+using BepInEx.Configuration;
 using BepInEx.Logging;
 using Mono.Cecil;
+using MonoMod;
 
 namespace BepInEx.MonoMod.Loader
 {
@@ -12,6 +15,8 @@ namespace BepInEx.MonoMod.Loader
         public static IEnumerable<string> TargetDLLs => CollectTargetDLLs();
 
         private static ManualLogSource Logger = Logging.Logger.CreateLogSource("MonoMod");
+
+        private static bool Debugging = false;
 
         public static string[] ResolveDirectories { get; set; } =
         {
@@ -31,12 +36,19 @@ namespace BepInEx.MonoMod.Loader
             if (!Directory.Exists(monoModPath))
                 Directory.CreateDirectory(monoModPath);
 
+            Logger.LogInfo(typeof(MonoModder).Assembly.FullName);
+
+            LogLevel logLevel = ((ConfigEntry<LogLevel>)typeof(ConsoleLogListener).GetField("ConfigConsoleDisplayedLevel", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null)).Value;
+            Debugging = (logLevel == LogLevel.Debug) || logLevel == LogLevel.All;
+
             Logger.LogInfo("Collecting target assemblies from mods");
+
 
             var result = new HashSet<string>();
 
             foreach (var modDll in Directory.GetFiles(monoModPath, "*.mm.dll", SearchOption.AllDirectories))
             {
+                Logger.LogDebug($"Checking {modDll}.");
                 var fileName = Path.GetFileNameWithoutExtension(modDll);
                 try
                 {
@@ -46,11 +58,14 @@ namespace BepInEx.MonoMod.Loader
                                 (fileName.StartsWith(assRef.Name, StringComparison.InvariantCultureIgnoreCase) ||
                                  fileName.StartsWith(assRef.Name.Replace(" ", ""),
                                                      StringComparison.InvariantCultureIgnoreCase)))
+                            {
+                                Logger.LogDebug($"\tAdded {assRef.Name}.dll");
                                 result.Add($"{assRef.Name}.dll");
+                            }
                 }
-                catch (Exception)
+                catch (Exception e)
                 {
-                    // skip
+                    Logger.LogDebug($"\tRejected: {e.Message}");
                 }
             }
 
@@ -66,10 +81,9 @@ namespace BepInEx.MonoMod.Loader
             if (!Directory.Exists(monoModPath))
                 Directory.CreateDirectory(monoModPath);
 
-
             using (var monoModder = new RuntimeMonoModder(assembly, Logger))
             {
-                monoModder.LogVerboseEnabled = false;
+                monoModder.LogVerboseEnabled = Debugging;
 
                 monoModder.DependencyDirs.AddRange(ResolveDirectories);
 
