@@ -81,6 +81,9 @@ namespace BepInEx.MonoMod.Loader
             if (!Directory.Exists(monoModPath))
                 Directory.CreateDirectory(monoModPath);
 
+            Logger.LogDebug($"Patch: {assembly.Name}");
+
+
             using (var monoModder = new RuntimeMonoModder(assembly, Logger))
             {
                 monoModder.LogVerboseEnabled = Debugging;
